@@ -35,6 +35,9 @@ func main() {
 		noCopyFlg = flag.Bool("no-copy", false, "do not copy result to clipboard")
 		helpFlag  = flag.Bool("help", false, "show help information")
 	)
+	// Make -h and flag parse errors print the full custom help
+	// instead of the bare generated flag list.
+	flag.Usage = func() { showHelp(flag.CommandLine.Output()) }
 	flag.Parse()
 
 	if *helpFlag {

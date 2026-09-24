@@ -55,6 +55,7 @@ mirr -no-copy https://github.com/golang/go
 ### Help
 ```bash
 mirr -help
+mirr -h
 ```
 
 ## Example Output
@@ -89,6 +90,7 @@ To:
 
 - `0`: at least one URL was converted
 - `1`: no valid GitHub URL found (or a usage/stdin error)
+- `2`: invalid command-line flags (e.g. unknown flag)
 
 ## Development
 
