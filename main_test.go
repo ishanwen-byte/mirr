@@ -1,0 +1,155 @@
+package main
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestConvertToMirror(t *testing.T) {
+	const base = "https://ghfast.top"
+	const wantPrefix = base + "/https://github.com/"
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		// Plain https form
+		{"https", "https://github.com/golang/go", wantPrefix + "golang/go.git"},
+		{"https with .git", "https://github.com/golang/go.git", wantPrefix + "golang/go.git"},
+		{"https trailing slash", "https://github.com/golang/go/", wantPrefix + "golang/go.git"},
+		{"http scheme", "http://github.com/golang/go", wantPrefix + "golang/go.git"},
+		{"www prefix", "https://www.github.com/gorilla/mux", wantPrefix + "gorilla/mux.git"},
+		{"mixed case host", "https://GITHUB.COM/golang/go", wantPrefix + "golang/go.git"},
+
+		// Extra paths are ignored
+		{"tree path", "https://github.com/golang/go/tree/master/src", wantPrefix + "golang/go.git"},
+		{"blob path", "https://github.com/gorilla/mux/blob/master/go.mod", wantPrefix + "gorilla/mux.git"},
+
+		// Scheme-less forms
+		{"scheme-less", "github.com/golang/go", wantPrefix + "golang/go.git"},
+		{"scheme-less www", "www.github.com/golang/go", wantPrefix + "golang/go.git"},
+
+		// SSH forms
+		{"scp-style ssh", "git@github.com:golang/go.git", wantPrefix + "golang/go.git"},
+		{"scp-style ssh no .git", "git@github.com:golang/go", wantPrefix + "golang/go.git"},
+		{"ssh:// form", "ssh://git@github.com/golang/go.git", wantPrefix + "golang/go.git"},
+
+		// Whitespace tolerance
+		{"surrounding spaces", "  https://github.com/golang/go  ", wantPrefix + "golang/go.git"},
+
+		// Invalid inputs
+		{"not a url", "hello world", ""},
+		{"gitlab url", "https://gitlab.com/gitlab-org/gitlab", ""},
+		{"owner only", "https://github.com/golang", ""},
+		{"empty string", "", ""},
+		{"gists", "https://gist.github.com/golang/1234", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := convertToMirror(tt.input, base)
+			if tt.want == "" {
+				if err == nil {
+					t.Fatalf("convertToMirror(%q) = %q, want error", tt.input, got)
+				}
+				if !errors.Is(err, errNotGitHub) {
+					t.Fatalf("convertToMirror(%q) error = %v, want errNotGitHub", tt.input, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("convertToMirror(%q) unexpected error: %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Errorf("convertToMirror(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertToMirrorCustomMirror(t *testing.T) {
+	got, err := convertToMirror("https://github.com/golang/go", "https://ghproxy.net/")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "https://ghproxy.net/https://github.com/golang/go.git"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestRunMultipleURLs(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	code := run(options{
+		urls:   []string{"https://github.com/golang/go", "bad input", "https://github.com/gorilla/mux"},
+		mirror: "https://ghfast.top",
+		noCopy: true,
+	}, strings.NewReader(""), &out, &errBuf)
+
+	if code != 0 {
+		t.Fatalf("run() exit code = %d, want 0", code)
+	}
+	got := out.String()
+	want := "https://ghfast.top/https://github.com/golang/go.git\n" +
+		"https://ghfast.top/https://github.com/gorilla/mux.git\n"
+	if got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if !strings.Contains(errBuf.String(), "bad input") {
+		t.Errorf("stderr should mention the invalid input, got %q", errBuf.String())
+	}
+}
+
+func TestRunAllInvalidExitsNonZero(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	code := run(options{
+		urls:   []string{"not a url"},
+		mirror: "https://ghfast.top",
+		noCopy: true,
+	}, strings.NewReader(""), &out, &errBuf)
+
+	if code != 1 {
+		t.Fatalf("run() exit code = %d, want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout should be empty, got %q", out.String())
+	}
+}
+
+func TestRunStdin(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	code := run(options{
+		mirror: "https://ghfast.top",
+		noCopy: true,
+	}, strings.NewReader("\n  https://github.com/golang/go  \n\nhttps://github.com/gorilla/mux\n"), &out, &errBuf)
+
+	if code != 0 {
+		t.Fatalf("run() exit code = %d, want 0", code)
+	}
+	want := "https://ghfast.top/https://github.com/golang/go.git\n" +
+		"https://ghfast.top/https://github.com/gorilla/mux.git\n"
+	if out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+}
+
+func TestRunNoInput(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	code := run(options{mirror: "https://ghfast.top", noCopy: true},
+		strings.NewReader(""), &out, &errBuf)
+	if code != 1 {
+		t.Fatalf("run() exit code = %d, want 1", code)
+	}
+	if !strings.Contains(errBuf.String(), "no URLs provided") {
+		t.Errorf("stderr = %q, want usage hint", errBuf.String())
+	}
+}
+
+func TestMain(m *testing.M) {
+	// clipboard is exercised in real usage; unit tests always pass -no-copy.
+	os.Exit(m.Run())
+}

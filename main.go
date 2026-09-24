@@ -2,9 +2,10 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -12,88 +13,140 @@ import (
 	"github.com/atotto/clipboard"
 )
 
-const (
-	githubURLPattern = `^https?://(?:www\.)?github\.com/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)(?:\.git)?/?$`
-	mirrorURLPrefix  = "https://ghfast.top/https://github.com/"
-)
+const defaultMirror = "https://ghfast.top"
+
+// Compiled once at package init instead of on every call.
+var githubURLRe = regexp.MustCompile(
+	`^https?://(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:/.*)?/?$`)
+
+// errNotGitHub is returned when an input line is not a recognizable GitHub URL.
+var errNotGitHub = errors.New("not a valid GitHub repository URL")
+
+type options struct {
+	urls   []string
+	mirror string
+	noCopy bool
+}
 
 func main() {
 	var (
-		urlFlag  = flag.String("url", "", "GitHub URL to convert")
-		helpFlag = flag.Bool("help", false, "Show help information")
+		urlFlag   = flag.String("url", "", "GitHub URL to convert")
+		mirrorFlg = flag.String("mirror", defaultMirror, "mirror site base URL, e.g. "+defaultMirror)
+		noCopyFlg = flag.Bool("no-copy", false, "do not copy result to clipboard")
+		helpFlag  = flag.Bool("help", false, "show help information")
 	)
 	flag.Parse()
 
 	if *helpFlag {
-		showHelp()
+		showHelp(os.Stdout)
 		return
 	}
 
 	var urls []string
-
 	if *urlFlag != "" {
 		urls = append(urls, *urlFlag)
 	} else if flag.NArg() > 0 {
 		urls = append(urls, flag.Args()...)
-	} else {
-		// Read from stdin
-		scanner := bufio.NewScanner(os.Stdin)
+	}
+
+	opts := options{urls: urls, mirror: *mirrorFlg, noCopy: *noCopyFlg}
+	os.Exit(run(opts, os.Stdin, os.Stdout, os.Stderr))
+}
+
+// run converts every URL and prints one mirror URL per line to stdout.
+// Human-readable progress, warnings, and clipboard status go to stderr so
+// stdout stays pipe-friendly. It returns the process exit code:
+// 0 if at least one URL was converted, 1 otherwise.
+func run(opts options, stdin io.Reader, stdout, stderr io.Writer) int {
+	urls := opts.urls
+	if len(urls) == 0 {
+		scanner := bufio.NewScanner(stdin)
 		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line != "" {
+			if line := strings.TrimSpace(scanner.Text()); line != "" {
 				urls = append(urls, line)
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			log.Fatalf("Error reading from stdin: %v", err)
+			fmt.Fprintf(stderr, "mirr: reading stdin: %v\n", err)
+			return 1
 		}
 	}
 
 	if len(urls) == 0 {
-		fmt.Println("Error: No URLs provided. Use -help for usage information.")
-		os.Exit(1)
+		fmt.Fprintln(stderr, "mirr: no URLs provided. Use -help for usage information.")
+		return 1
 	}
 
-	for _, url := range urls {
-		mirrorURL := convertToMirror(url)
-		if mirrorURL != "" {
-			fmt.Printf("Original:  %s\n", url)
-			fmt.Printf("Mirror:    %s\n", mirrorURL)
-			fmt.Println()
+	var converted []string
+	for _, u := range urls {
+		mirror, err := convertToMirror(u, opts.mirror)
+		if err != nil {
+			fmt.Fprintf(stderr, "mirr: warning: %v\n", err)
+			continue
+		}
+		fmt.Fprintf(stderr, "%s\n  -> %s\n", u, mirror)
+		fmt.Fprintln(stdout, mirror)
+		converted = append(converted, mirror)
+	}
 
-			// Copy to clipboard
-			if err := clipboard.WriteAll(mirrorURL); err != nil {
-				log.Printf("Warning: Failed to copy to clipboard: %v", err)
-			} else {
-				fmt.Println("Mirror URL copied to clipboard!")
-			}
-			break // Only process the first URL for clipboard operation
+	if len(converted) == 0 {
+		fmt.Fprintln(stderr, "mirr: no valid GitHub URLs found")
+		return 1
+	}
+
+	if !opts.noCopy {
+		if err := clipboard.WriteAll(strings.Join(converted, "\n")); err != nil {
+			fmt.Fprintf(stderr, "mirr: warning: clipboard copy failed: %v\n", err)
+		} else if len(converted) == 1 {
+			fmt.Fprintln(stderr, "Mirror URL copied to clipboard!")
+		} else {
+			fmt.Fprintf(stderr, "%d mirror URLs copied to clipboard!\n", len(converted))
 		}
 	}
+	return 0
 }
 
-func convertToMirror(url string) string {
-	re := regexp.MustCompile(githubURLPattern)
-	matches := re.FindStringSubmatch(url)
-
-	if len(matches) != 3 {
-		fmt.Printf("Warning: '%s' is not a valid GitHub URL\n", url)
-		return ""
+// normalize maps common GitHub URL variants onto a canonical https URL:
+// SSH forms (git@github.com:owner/repo, ssh://git@github.com/owner/repo)
+// and scheme-less forms (github.com/owner/repo, www.github.com/owner/repo).
+func normalize(input string) string {
+	s := strings.TrimSpace(input)
+	lower := strings.ToLower(s)
+	switch {
+	case strings.HasPrefix(lower, "git@github.com:"):
+		return "https://github.com/" + s[len("git@github.com:"):]
+	case strings.HasPrefix(lower, "ssh://git@github.com/"):
+		return "https://github.com/" + s[len("ssh://git@github.com/"):]
+	case strings.HasPrefix(lower, "github.com/"),
+		strings.HasPrefix(lower, "www.github.com/"):
+		return "https://" + s
 	}
-
-	owner := matches[1]
-	repo := matches[2]
-
-	// Remove .git suffix if present
-	repo = strings.TrimSuffix(repo, ".git")
-
-	return mirrorURLPrefix + owner + "/" + repo + ".git"
+	// Schemes and hosts are case-insensitive: HTTPS://GITHUB.COM/... must match.
+	if i := strings.Index(lower, "://"); i >= 0 {
+		rest := s[i+3:]
+		if slash := strings.IndexByte(rest, '/'); slash >= 0 {
+			return s[:i+3] + strings.ToLower(rest[:slash]) + rest[slash:]
+		}
+		return s[:i+3] + strings.ToLower(rest)
+	}
+	return s
 }
 
-func showHelp() {
-	fmt.Printf(`mirr - GitHub Mirror Converter
+// convertToMirror turns any supported GitHub URL into
+// <mirrorBase>/https://github.com/<owner>/<repo>.git.
+func convertToMirror(input, mirrorBase string) (string, error) {
+	m := githubURLRe.FindStringSubmatch(normalize(input))
+	if m == nil {
+		return "", fmt.Errorf("%w: %s", errNotGitHub, input)
+	}
+	owner, repo := m[1], strings.TrimSuffix(m[2], ".git")
+	return strings.TrimSuffix(mirrorBase, "/") + "/https://github.com/" + owner + "/" + repo + ".git", nil
+}
 
-Convert GitHub URLs to gitcode mirror format and copy to clipboard.
+func showHelp(w io.Writer) {
+	fmt.Fprintf(w, `mirr - GitHub Mirror Converter
+
+Convert GitHub URLs to a mirror prefix (default: %[1]s) and copy to clipboard.
 
 Usage:
   mirr [options] [URL...]
@@ -102,13 +155,22 @@ Usage:
 
 Options:
   -url string    GitHub URL to convert
-  -help          Show this help message
+  -mirror string mirror site base URL (default %[1]q)
+  -no-copy       print only, skip clipboard
+  -help          show this help message
 
-Examples:
-  mirr https://github.com/gorilla/mux
-  mirr https://github.com/golang/go
-  echo "https://github.com/kubernetes/kubernetes" | mirr
+Accepted input forms include:
+  https://github.com/owner/repo          https://github.com/owner/repo.git
+  http://www.github.com/owner/repo/      github.com/owner/repo
+  git@github.com:owner/repo.git          ssh://git@github.com/owner/repo
+  https://github.com/owner/repo/tree/main  (extra paths are ignored)
 
-The converted URL will be copied to your clipboard automatically.
-`)
+Output:
+  One converted mirror URL per line on stdout (pipe-friendly).
+  Warnings and clipboard status are printed to stderr.
+
+Exit codes:
+  0  at least one URL was converted
+  1  no valid GitHub URL found (or usage/stdin error)
+`, defaultMirror)
 }

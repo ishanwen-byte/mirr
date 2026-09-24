@@ -1,0 +1,15 @@
+# Binaries
+mirr
+mirr.exe
+mirr-*
+
+# Go build/test artifacts
+*.test
+*.out
+coverage.*
+
+# Editor & OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
