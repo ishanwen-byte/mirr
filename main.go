@@ -15,6 +15,10 @@ import (
 
 const defaultMirror = "https://ghfast.top"
 
+// version is set at build time via:
+//   go build -ldflags "-X main.version=v2.0.0" -o mirr.exe .
+var version = "dev"
+
 // Compiled once at package init instead of on every call.
 var githubURLRe = regexp.MustCompile(
 	`^https?://(?:www\.)?github\.com/([\p{L}\p{N}_.-]+)/(\p{L}[\p{L}\p{N}_.-]*?)(?:\.git)?(?:[/?#].*)?$`)
@@ -33,6 +37,7 @@ func main() {
 		urlFlag   = flag.String("url", "", "GitHub URL to convert")
 		mirrorFlg = flag.String("mirror", defaultMirror, "mirror site base URL, e.g. "+defaultMirror)
 		noCopyFlg = flag.Bool("no-copy", false, "do not copy result to clipboard")
+		verFlag   = flag.Bool("version", false, "print version and exit")
 		helpFlag  = flag.Bool("help", false, "show help information")
 	)
 	// Make -h and flag parse errors print the full custom help
@@ -42,6 +47,11 @@ func main() {
 
 	if *helpFlag {
 		showHelp(os.Stdout)
+		return
+	}
+
+	if *verFlag {
+		fmt.Println(version)
 		return
 	}
 
@@ -166,6 +176,7 @@ Options:
   -url string    GitHub URL to convert
   -mirror string mirror site base URL (default %[1]q)
   -no-copy       print only, skip clipboard
+  -version       print version and exit
   -help          show this help message
 
 Accepted input forms include:

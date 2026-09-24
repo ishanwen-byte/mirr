@@ -54,6 +54,11 @@ mirr -mirror https://ghproxy.net/ https://github.com/golang/go
 mirr -no-copy https://github.com/golang/go
 ```
 
+### 查看版本号
+```bash
+mirr -version
+```
+
 ### 查看帮助
 ```bash
 mirr -help
@@ -93,6 +98,14 @@ https://github.com/[所有者]/[仓库]/tree/main   （忽略额外路径）
 - `0`：至少转换了一个 URL
 - `1`：没有找到有效的 GitHub URL（或用法/stdin 错误）
 - `2`：命令行标志无效（如未知标志）
+
+## 版本化构建
+
+构建时嵌入当前 git 版本：
+
+```bash
+go build -ldflags "-X main.version=$(git describe --tags --always)" -o mirr.exe .
+```
 
 ## 开发
 

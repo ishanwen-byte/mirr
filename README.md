@@ -54,6 +54,11 @@ mirr -mirror https://ghproxy.net/ https://github.com/golang/go
 mirr -no-copy https://github.com/golang/go
 ```
 
+### Show version
+```bash
+mirr -version
+```
+
 ### Help
 ```bash
 mirr -help
@@ -93,6 +98,14 @@ To:
 - `0`: at least one URL was converted
 - `1`: no valid GitHub URL found (or a usage/stdin error)
 - `2`: invalid command-line flags (e.g. unknown flag)
+
+## Versioned builds
+
+Embed the current git version at build time:
+
+```bash
+go build -ldflags "-X main.version=$(git describe --tags --always)" -o mirr.exe .
+```
 
 ## Development
 
