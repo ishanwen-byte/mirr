@@ -125,6 +125,22 @@ func TestRunAllInvalidExitsNonZero(t *testing.T) {
 	}
 }
 
+func TestRunStdinLongLine(t *testing.T) {
+	// A line beyond the default 64 KiB Scanner limit must not kill the run;
+	// it is simply invalid input and gets a warning.
+	long := strings.Repeat("a", 100*1024)
+	in := "https://github.com/golang/go\n" + long + "\n"
+	var out, errBuf bytes.Buffer
+	code := run(options{mirror: "https://ghfast.top", noCopy: true},
+		strings.NewReader(in), &out, &errBuf)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0 (valid line should still convert)", code)
+	}
+	if !strings.Contains(out.String(), "golang/go.git") {
+		t.Errorf("stdout = %q, want golang/go.git", out.String())
+	}
+}
+
 func TestRunStdin(t *testing.T) {
 	var out, errBuf bytes.Buffer
 	code := run(options{

@@ -37,6 +37,8 @@ mirr https://github.com/golang/go git@github.com:gorilla/mux.git github.com/kube
 mirr -url https://github.com/kubernetes/kubernetes
 ```
 
+（若同时提供 `-url` 和位置参数，则只用 `-url`。）
+
 ### 管道输入
 ```bash
 echo "https://github.com/gorilla/mux" | mirr

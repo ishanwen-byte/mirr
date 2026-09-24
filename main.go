@@ -64,6 +64,9 @@ func run(opts options, stdin io.Reader, stdout, stderr io.Writer) int {
 	urls := opts.urls
 	if len(urls) == 0 {
 		scanner := bufio.NewScanner(stdin)
+		// Handle absurdly long lines (e.g. pasted junk) instead of failing
+		// with the default 64 KiB Scanner limit.
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for scanner.Scan() {
 			if line := strings.TrimSpace(scanner.Text()); line != "" {
 				urls = append(urls, line)

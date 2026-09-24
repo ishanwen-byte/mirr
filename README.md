@@ -37,6 +37,8 @@ mirr https://github.com/golang/go git@github.com:gorilla/mux.git github.com/kube
 mirr -url https://github.com/kubernetes/kubernetes
 ```
 
+(If both `-url` and positional arguments are given, only `-url` is used.)
+
 ### Piped input
 ```bash
 echo "https://github.com/gorilla/mux" | mirr
