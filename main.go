@@ -17,7 +17,7 @@ const defaultMirror = "https://ghfast.top"
 
 // Compiled once at package init instead of on every call.
 var githubURLRe = regexp.MustCompile(
-	`^https?://(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#].*)?$`)
+	`^https?://(?:www\.)?github\.com/([\p{L}\p{N}_.-]+)/(\p{L}[\p{L}\p{N}_.-]*?)(?:\.git)?(?:[/?#].*)?$`)
 
 // errNotGitHub is returned when an input line is not a recognizable GitHub URL.
 var errNotGitHub = errors.New("not a valid GitHub repository URL")
@@ -117,6 +117,8 @@ func run(opts options, stdin io.Reader, stdout, stderr io.Writer) int {
 // and scheme-less forms (github.com/owner/repo, www.github.com/owner/repo).
 func normalize(input string) string {
 	s := strings.TrimSpace(input)
+	// Strip a UTF-8 BOM: PowerShell 5 pipes strings with a BOM prefix.
+	s = strings.TrimPrefix(s, "\ufeff")
 	lower := strings.ToLower(s)
 	switch {
 	case strings.HasPrefix(lower, "git@github.com:"):

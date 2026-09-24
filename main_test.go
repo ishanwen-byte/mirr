@@ -43,8 +43,12 @@ func TestConvertToMirror(t *testing.T) {
 		{"scp-style ssh no .git", "git@github.com:golang/go", wantPrefix + "golang/go.git"},
 		{"ssh:// form", "ssh://git@github.com/golang/go.git", wantPrefix + "golang/go.git"},
 
-		// Whitespace tolerance
+		// Whitespace / BOM tolerance
 		{"surrounding spaces", "  https://github.com/golang/go  ", wantPrefix + "golang/go.git"},
+		{"PowerShell BOM", "\ufeffhttps://github.com/golang/go", wantPrefix + "golang/go.git"},
+
+		// Unicode repo names (GitHub allows them)
+		{"chinese repo name", "https://github.com/中文项目/仓库", wantPrefix + "中文项目/仓库.git"},
 
 		// Invalid inputs
 		{"not a url", "hello world", ""},
