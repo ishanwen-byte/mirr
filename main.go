@@ -17,7 +17,7 @@ const defaultMirror = "https://ghfast.top"
 
 // Compiled once at package init instead of on every call.
 var githubURLRe = regexp.MustCompile(
-	`^https?://(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:/.*)?/?$`)
+	`^https?://(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#].*)?$`)
 
 // errNotGitHub is returned when an input line is not a recognizable GitHub URL.
 var errNotGitHub = errors.New("not a valid GitHub repository URL")
@@ -114,20 +114,21 @@ func normalize(input string) string {
 	lower := strings.ToLower(s)
 	switch {
 	case strings.HasPrefix(lower, "git@github.com:"):
-		return "https://github.com/" + s[len("git@github.com:"):]
+		s = "https://github.com/" + s[len("git@github.com:"):]
 	case strings.HasPrefix(lower, "ssh://git@github.com/"):
-		return "https://github.com/" + s[len("ssh://git@github.com/"):]
-	case strings.HasPrefix(lower, "github.com/"),
-		strings.HasPrefix(lower, "www.github.com/"):
-		return "https://" + s
+		s = "https://github.com/" + s[len("ssh://git@github.com/"):]
+	case strings.HasPrefix(lower, "www.github.com/"):
+		s = "https://" + s[len("www."):]
+	case strings.HasPrefix(lower, "github.com/"):
+		s = "https://" + s
 	}
 	// Schemes and hosts are case-insensitive: HTTPS://GITHUB.COM/... must match.
-	if i := strings.Index(lower, "://"); i >= 0 {
+	if i := strings.Index(strings.ToLower(s), "://"); i >= 0 {
 		rest := s[i+3:]
 		if slash := strings.IndexByte(rest, '/'); slash >= 0 {
-			return s[:i+3] + strings.ToLower(rest[:slash]) + rest[slash:]
+			return strings.ToLower(s[:i+3]) + strings.ToLower(rest[:slash]) + rest[slash:]
 		}
-		return s[:i+3] + strings.ToLower(rest)
+		return strings.ToLower(s)
 	}
 	return s
 }
@@ -163,7 +164,7 @@ Accepted input forms include:
   https://github.com/owner/repo          https://github.com/owner/repo.git
   http://www.github.com/owner/repo/      github.com/owner/repo
   git@github.com:owner/repo.git          ssh://git@github.com/owner/repo
-  https://github.com/owner/repo/tree/main  (extra paths are ignored)
+  https://github.com/owner/repo/tree/main  (paths, ?queries, #fragments ignored)
 
 Output:
   One converted mirror URL per line on stdout (pipe-friendly).

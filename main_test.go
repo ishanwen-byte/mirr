@@ -24,8 +24,13 @@ func TestConvertToMirror(t *testing.T) {
 		{"http scheme", "http://github.com/golang/go", wantPrefix + "golang/go.git"},
 		{"www prefix", "https://www.github.com/gorilla/mux", wantPrefix + "gorilla/mux.git"},
 		{"mixed case host", "https://GITHUB.COM/golang/go", wantPrefix + "golang/go.git"},
+		{"uppercase scheme", "HTTPS://GITHUB.COM/golang/go", wantPrefix + "golang/go.git"},
+		{"mixed case no scheme", "www.GitHub.Com/golang/go", wantPrefix + "golang/go.git"},
 
-		// Extra paths are ignored
+		// Query strings and fragments are ignored
+		{"query string", "https://github.com/golang/go?tab=readme", wantPrefix + "golang/go.git"},
+		{"fragment", "https://github.com/gorilla/mux#readme", wantPrefix + "gorilla/mux.git"},
+		{"query with path", "https://github.com/golang/go/tree/main?query=1#frag", wantPrefix + "golang/go.git"},
 		{"tree path", "https://github.com/golang/go/tree/master/src", wantPrefix + "golang/go.git"},
 		{"blob path", "https://github.com/gorilla/mux/blob/master/go.mod", wantPrefix + "gorilla/mux.git"},
 

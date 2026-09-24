@@ -13,3 +13,7 @@ coverage.*
 .vscode/
 *.swp
 .DS_Store
+
+# Local tooling workspaces
+.claw/
+.spec-workflow/
