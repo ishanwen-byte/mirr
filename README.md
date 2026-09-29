@@ -12,8 +12,15 @@ A simple Go CLI tool that converts GitHub URLs to a mirror prefix (default: `ghf
 - Pipe-friendly: results go to stdout, warnings/status to stderr
 - Meaningful exit codes (0 = at least one conversion, 1 = none) for scripts and CI
 - Automatically copy converted URL(s) to clipboard (opt out with `-no-copy`; skipped when `-clone` is used)
+- Agent skill included — see [skills/mirr/SKILL.md](skills/mirr/SKILL.md): after installing, any agent can bypass GitHub connectivity failures and still clone/download GitHub resources
 
 ## Installation
+
+```bash
+go install github.com/ishanwen-byte/mirr@latest
+```
+
+Or build from source:
 
 ```bash
 git clone https://github.com/ishanwen-byte/mirr.git

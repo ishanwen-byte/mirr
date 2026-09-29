@@ -12,8 +12,15 @@
 - 对管道友好：转换结果走 stdout，警告和状态信息走 stderr
 - 有意义的退出码（0 = 至少转换一个，1 = 一个都没有），便于脚本和 CI 判断
 - 自动复制转换结果到剪贴板（可用 `-no-copy` 关闭；使用 `-clone` 时自动跳过）
+- 内置 agent skill —— 见 [skills/mirr/SKILL.md](skills/mirr/SKILL.md)：安装后 agent 可在 GitHub 无法访问时照常克隆/下载 GitHub 资源
 
 ## 安装
+
+```bash
+go install github.com/ishanwen-byte/mirr@latest
+```
+
+或从源码构建：
 
 ```bash
 git clone https://github.com/ishanwen-byte/mirr.git
