@@ -1,4 +1,4 @@
-module mirr
+module github.com/ishanwen-byte/mirr
 
 go 1.16
 
