@@ -6,11 +6,12 @@ A simple Go CLI tool that converts GitHub URLs to a mirror prefix (default: `ghf
 
 - Convert GitHub URLs to mirror format, one result per line on stdout
 - Accepts many URL forms: `https://`, `http://`, `www.`, scheme-less, SSH (`git@github.com:owner/repo`, `ssh://git@github.com/owner/repo`), and URLs with extra paths (`/tree/main/...`) or trailing slashes
+- **`-clone`: convert and `git clone` in one step** — no copy-pasting, git runs interactively in the foreground
 - Handles multiple URLs at once (all are converted, invalid ones produce warnings on stderr)
 - Configurable mirror site via `-mirror`
 - Pipe-friendly: results go to stdout, warnings/status to stderr
 - Meaningful exit codes (0 = at least one conversion, 1 = none) for scripts and CI
-- Automatically copy converted URL(s) to clipboard (opt out with `-no-copy`)
+- Automatically copy converted URL(s) to clipboard (opt out with `-no-copy`; skipped when `-clone` is used)
 
 ## Installation
 
@@ -42,6 +43,20 @@ mirr -url https://github.com/kubernetes/kubernetes
 ### Piped input
 ```bash
 echo "https://github.com/gorilla/mux" | mirr
+```
+
+### Convert and clone in one step
+```bash
+mirr -clone https://github.com/golang/go
+echo "https://github.com/gorilla/mux" | mirr -clone
+```
+
+`-clone` runs `git clone <mirror-url>` in the foreground so progress and
+credential prompts work normally. Clipboard is skipped automatically.
+
+### Pipe into git yourself
+```bash
+mirr -no-copy https://github.com/golang/go | xargs git clone
 ```
 
 ### Custom mirror site
@@ -95,8 +110,8 @@ To:
 
 ## Exit Codes
 
-- `0`: at least one URL was converted
-- `1`: no valid GitHub URL found (or a usage/stdin error)
+- `0`: at least one URL was converted (and, with `-clone`, at least one clone succeeded)
+- `1`: no valid GitHub URL found, or all clones failed (with `-clone`)
 - `2`: invalid command-line flags (e.g. unknown flag)
 
 ## Versioned builds

@@ -174,6 +174,102 @@ func TestRunNoInput(t *testing.T) {
 	}
 }
 
+func TestRunCloneSuccess(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	var cloned []string
+	code := run(options{
+		urls:   []string{"https://github.com/golang/go"},
+		mirror: "https://ghfast.top",
+		clone:  true,
+		cloneFn: func(url string) error {
+			cloned = append(cloned, url)
+			return nil
+		},
+	}, strings.NewReader(""), &out, &errBuf)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	want := "https://ghfast.top/https://github.com/golang/go.git"
+	if len(cloned) != 1 || cloned[0] != want {
+		t.Errorf("cloned = %v, want [%s]", cloned, want)
+	}
+	// -clone must skip the clipboard path entirely.
+	if strings.Contains(errBuf.String(), "clipboard") {
+		t.Errorf("stderr should not mention clipboard with -clone, got %q", errBuf.String())
+	}
+}
+
+func TestRunCloneAllFailed(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	code := run(options{
+		urls:   []string{"https://github.com/golang/go"},
+		mirror: "https://ghfast.top",
+		clone:  true,
+		cloneFn: func(url string) error {
+			return errors.New("connection refused")
+		},
+	}, strings.NewReader(""), &out, &errBuf)
+
+	if code != 1 {
+		t.Fatalf("exit code = clone failure should be 1, got %d", code)
+	}
+	if !strings.Contains(errBuf.String(), "all clones failed") {
+		t.Errorf("stderr = %q, want 'all clones failed'", errBuf.String())
+	}
+	// The mirror URL must still reach stdout for scripted use.
+	if !strings.Contains(out.String(), "golang/go.git") {
+		t.Errorf("stdout = %q, want mirror URL", out.String())
+	}
+}
+
+func TestRunClonePartialFailure(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	var cloned []string
+	code := run(options{
+		urls: []string{"https://github.com/golang/go", "https://github.com/gorilla/mux"},
+		mirror: "https://ghfast.top",
+		clone:  true,
+		cloneFn: func(url string) error {
+			if strings.Contains(url, "golang/go") {
+				return errors.New("network down")
+			}
+			cloned = append(cloned, url)
+			return nil
+		},
+	}, strings.NewReader(""), &out, &errBuf)
+
+	if code != 0 {
+		t.Fatalf("partial success exit code = %d, want 0", code)
+	}
+	if len(cloned) != 1 || !strings.Contains(cloned[0], "gorilla/mux") {
+		t.Errorf("cloned = %v, want only gorilla/mux", cloned)
+	}
+	if !strings.Contains(errBuf.String(), "clone failed") {
+		t.Errorf("stderr = %q, want clone failure warning", errBuf.String())
+	}
+}
+
+func TestRunCloneFromStdin(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	var cloned []string
+	code := run(options{
+		mirror: "https://ghfast.top",
+		clone:  true,
+		cloneFn: func(url string) error {
+			cloned = append(cloned, url)
+			return nil
+		},
+	}, strings.NewReader("https://github.com/golang/go\n"), &out, &errBuf)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if len(cloned) != 1 || !strings.Contains(cloned[0], "golang/go.git") {
+		t.Errorf("cloned = %v, want golang/go.git", cloned)
+	}
+}
+
 func TestMain(m *testing.M) {
 	// clipboard is exercised in real usage; unit tests always pass -no-copy.
 	os.Exit(m.Run())

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 
@@ -27,15 +28,18 @@ var githubURLRe = regexp.MustCompile(
 var errNotGitHub = errors.New("not a valid GitHub repository URL")
 
 type options struct {
-	urls   []string
-	mirror string
-	noCopy bool
+	urls    []string
+	mirror  string
+	noCopy  bool
+	clone   bool
+	cloneFn func(url string) error // injected for tests; defaults to runGitClone
 }
 
 func main() {
 	var (
 		urlFlag   = flag.String("url", "", "GitHub URL to convert")
 		mirrorFlg = flag.String("mirror", defaultMirror, "mirror site base URL, e.g. "+defaultMirror)
+		cloneFlg  = flag.Bool("clone", false, "run git clone on each converted mirror URL")
 		noCopyFlg = flag.Bool("no-copy", false, "do not copy result to clipboard")
 		verFlag   = flag.Bool("version", false, "print version and exit")
 		helpFlag  = flag.Bool("help", false, "show help information")
@@ -62,7 +66,7 @@ func main() {
 		urls = append(urls, flag.Args()...)
 	}
 
-	opts := options{urls: urls, mirror: *mirrorFlg, noCopy: *noCopyFlg}
+	opts := options{urls: urls, mirror: *mirrorFlg, noCopy: *noCopyFlg, clone: *cloneFlg}
 	os.Exit(run(opts, os.Stdin, os.Stdout, os.Stderr))
 }
 
@@ -94,6 +98,7 @@ func run(opts options, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	var converted []string
+	var cloneFailed int
 	for _, u := range urls {
 		mirror, err := convertToMirror(u, opts.mirror)
 		if err != nil {
@@ -103,11 +108,30 @@ func run(opts options, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%s\n  -> %s\n", u, mirror)
 		fmt.Fprintln(stdout, mirror)
 		converted = append(converted, mirror)
+
+		if opts.clone {
+			clone := runGitClone
+			if opts.cloneFn != nil {
+				clone = opts.cloneFn
+			}
+			if err := clone(mirror); err != nil {
+				cloneFailed++
+				fmt.Fprintf(stderr, "mirr: warning: clone failed for %s: %v\n", mirror, err)
+			}
+		}
 	}
 
 	if len(converted) == 0 {
 		fmt.Fprintln(stderr, "mirr: no valid GitHub URLs found")
 		return 1
+	}
+
+	if opts.clone {
+		if cloneFailed == len(converted) {
+			fmt.Fprintln(stderr, "mirr: all clones failed")
+			return 1
+		}
+		return 0 // cloning implies immediate use; skip clipboard
 	}
 
 	if !opts.noCopy {
@@ -162,6 +186,16 @@ func convertToMirror(input, mirrorBase string) (string, error) {
 	return strings.TrimSuffix(mirrorBase, "/") + "/https://github.com/" + owner + "/" + repo + ".git", nil
 }
 
+// runGitClone clones the given URL with git, passing stdout/stderr through
+// so clone progress and credentials prompts behave as if git were run directly.
+func runGitClone(url string) error {
+	cmd := exec.Command("git", "clone", url)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func showHelp(w io.Writer) {
 	fmt.Fprintf(w, `mirr - GitHub Mirror Converter
 
@@ -171,10 +205,13 @@ Usage:
   mirr [options] [URL...]
   echo "https://github.com/user/repo" | mirr
   mirr -url https://github.com/user/repo
+  mirr -clone https://github.com/user/repo     convert then git clone
+  echo "https://github.com/user/repo" | mirr -clone
 
 Options:
   -url string    GitHub URL to convert
   -mirror string mirror site base URL (default %[1]q)
+  -clone         convert then run git clone on each mirror URL
   -no-copy       print only, skip clipboard
   -version       print version and exit
   -help          show this help message
@@ -189,8 +226,11 @@ Output:
   One converted mirror URL per line on stdout (pipe-friendly).
   Warnings and clipboard status are printed to stderr.
 
+  With -clone, git runs interactively in the foreground and the
+  clipboard is skipped (exit 1 if every clone failed).
+
 Exit codes:
-  0  at least one URL was converted
-  1  no valid GitHub URL found (or usage/stdin error)
+  0  at least one URL was converted (and, with -clone, cloned)
+  1  no valid GitHub URL found, or all clones failed
 `, defaultMirror)
 }

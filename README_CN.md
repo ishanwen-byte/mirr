@@ -6,11 +6,12 @@
 
 - 将 GitHub URL 转换为镜像格式，结果逐行输出到 stdout
 - 支持多种 URL 形式：`https://`、`http://`、`www.`、无协议、SSH（`git@github.com:owner/repo`、`ssh://git@github.com/owner/repo`）、带额外路径（`/tree/main/...`）或尾斜杠
+- **`-clone`：转换并一步执行 `git clone`** —— 无需手动粘贴，git 在前台交互运行
 - 支持一次处理多个 URL（全部转换，无效的在 stderr 上给出警告）
 - 通过 `-mirror` 可配置镜像站点
 - 对管道友好：转换结果走 stdout，警告和状态信息走 stderr
 - 有意义的退出码（0 = 至少转换一个，1 = 一个都没有），便于脚本和 CI 判断
-- 自动复制转换结果到剪贴板（可用 `-no-copy` 关闭）
+- 自动复制转换结果到剪贴板（可用 `-no-copy` 关闭；使用 `-clone` 时自动跳过）
 
 ## 安装
 
@@ -42,6 +43,19 @@ mirr -url https://github.com/kubernetes/kubernetes
 ### 管道输入
 ```bash
 echo "https://github.com/gorilla/mux" | mirr
+```
+
+### 转换并一步克隆
+```bash
+mirr -clone https://github.com/golang/go
+echo "https://github.com/gorilla/mux" | mirr -clone
+```
+
+`-clone` 会在前台执行 `git clone <镜像URL>`，进度显示和凭据提示与直接使用 git 相同，并自动跳过剪贴板。
+
+### 自行接 git 管道
+```bash
+mirr -no-copy https://github.com/golang/go | xargs git clone
 ```
 
 ### 自定义镜像站点
@@ -95,8 +109,8 @@ https://github.com/[所有者]/[仓库]/tree/main   （忽略额外路径）
 
 ## 退出码
 
-- `0`：至少转换了一个 URL
-- `1`：没有找到有效的 GitHub URL（或用法/stdin 错误）
+- `0`：至少转换了一个 URL（使用 `-clone` 时至少一个克隆成功）
+- `1`：没有找到有效的 GitHub URL，或（使用 `-clone` 时）全部克隆失败
 - `2`：命令行标志无效（如未知标志）
 
 ## 版本化构建
