@@ -1,6 +1,8 @@
 # mirr - GitHub Mirror Converter
 
-A simple Go CLI tool that converts GitHub URLs to a mirror prefix (default: `ghfast.top`) and automatically copies the converted URL(s) to clipboard.
+[![Go](https://img.shields.io/badge/go-1.16%2B-00ADD8)](go.mod) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/badge/version-v1.2.0-green)]()
+
+A simple Go CLI tool that converts GitHub URLs to a mirror prefix (default: `ghfast.top`) and automatically copies the converted URL(s) to clipboard. Works as a human CLI and as an **agent skill**: when GitHub is slow, blocked, or unreachable, mirr keeps clones, release downloads, and raw file fetches working through a mirror.
 
 ## Features
 
@@ -127,6 +129,51 @@ Embed the current git version at build time:
 
 ```bash
 go build -ldflags "-X main.version=$(git describe --tags --always)" -o mirr.exe .
+```
+
+## Agent Usage (machine-friendly)
+
+mirr is designed for both humans and autonomous agents (Claude Code, Codex, Jcode, etc.).
+
+### Why agents need this
+
+Agents routinely `git clone` or `curl` from github.com. In restricted or
+slow networks those operations hang or fail. mirr gives the agent a one-line
+escape hatch: rewrite the URL through a mirror and keep working.
+
+### Install the skill
+
+The skill definition lives at [`skills/mirr/SKILL.md`](skills/mirr/SKILL.md).
+To install it for an agent that loads skills from a directory:
+
+```bash
+# Claude Code / any agent using ~/.claude/skills
+git clone https://github.com/ishanwen-byte/mirr.git
+cp -r mirr/skills/mirr ~/.claude/skills/
+```
+
+Once installed, the agent auto-triggers the skill whenever a GitHub clone or
+download fails, and bootstraps the binary itself:
+
+```bash
+go install github.com/ishanwen-byte/mirr@latest
+```
+
+### Machine-friendly by design
+
+- `-no-copy`: pure stdout output, no clipboard side effects (agents must use this)
+- Exit codes are script-stable: `0` convert/clone OK, `1` nothing valid or all clones failed, `2` bad flags
+- stdout (results) and stderr (progress/warnings) are strictly separated
+- Multiple URLs and stdin batching: `mirr -no-copy < urls.txt`
+- Mirror rotation on failure: `mirr -mirror https://ghproxy.net/ ...`
+- No config, no daemon, no network calls of its own — a deterministic string rewriter plus optional `git clone`
+
+### Example agent session
+
+```text
+agent> task: clone https://github.com/torvalds/linux (github.com unreachable)
+  mirr -clone -no-copy https://github.com/torvalds/linux
+  → git clone https://ghfast.top/https://github.com/torvalds/linux.git  ✓
 ```
 
 ## Development

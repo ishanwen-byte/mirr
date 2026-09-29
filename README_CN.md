@@ -1,6 +1,8 @@
 # mirr - GitHub 镜像转换工具
 
-一个简单的 Go 命令行工具，将 GitHub URL 转换为镜像格式（默认 `ghfast.top`），并自动复制转换后的 URL 到剪贴板。
+[![Go](https://img.shields.io/badge/go-1.16%2B-00ADD8)](go.mod) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Version](https://img.shields.io/badge/version-v1.2.0-green)]()
+
+一个简单的 Go 命令行工具，将 GitHub URL 转换为镜像格式（默认 `ghfast.top`），并自动复制转换后的 URL 到剪贴板。既可供人类使用，也可作为 **agent skill**：当 GitHub 慢、被屏蔽或无法访问时，mirr 让克隆、Release 下载、raw 文件拉取继续通过镜像工作。
 
 ## 功能特性
 
@@ -126,6 +128,47 @@ https://github.com/[所有者]/[仓库]/tree/main   （忽略额外路径）
 
 ```bash
 go build -ldflags "-X main.version=$(git describe --tags --always)" -o mirr.exe .
+```
+
+## Agent 使用（机器友好）
+
+mirr 同时面向人类与自主 agent（Claude Code、Codex、Jcode 等）设计。
+
+### 为什么 agent 需要它
+
+agent 经常需要 `git clone` 或 `curl` github.com 上的资源。在受限或慢速网络中，这些操作会挂起或失败。mirr 给 agent 提供了一行命令的逃生通道：通过镜像重写 URL，工作继续。
+
+### 安装 skill
+
+skill 定义位于 [`skills/mirr/SKILL.md`](skills/mirr/SKILL.md)。对从目录加载 skill 的 agent：
+
+```bash
+# Claude Code / 任何使用 ~/.claude/skills 的 agent
+git clone https://github.com/ishanwen-byte/mirr.git
+cp -r mirr/skills/mirr ~/.claude/skills/
+```
+
+安装后，agent 会在 GitHub 克隆/下载失败时自动触发该 skill，并自行引导安装二进制：
+
+```bash
+go install github.com/ishanwen-byte/mirr@latest
+```
+
+### 机器友好设计
+
+- `-no-copy`：纯 stdout 输出，无剪贴板副作用（agent 必须使用）
+- 退出码脚本稳定：`0` 转换/克隆成功，`1` 无有效 URL 或全部克隆失败，`2` 标志错误
+- stdout（结果）与 stderr（进度/警告）严格分离
+- 多 URL 与 stdin 批量：`mirr -no-copy < urls.txt`
+- 镜像失败可轮换：`mirr -mirror https://ghproxy.net/ ...`
+- 无配置、无守护进程、自身无网络调用 —— 确定性的字符串重写器 + 可选 `git clone`
+
+### agent 会话示例
+
+```text
+agent> 任务: clone https://github.com/torvalds/linux （github.com 不可达）
+  mirr -clone -no-copy https://github.com/torvalds/linux
+  → git clone https://ghfast.top/https://github.com/torvalds/linux.git  ✓
 ```
 
 ## 开发
