@@ -17,7 +17,8 @@ import (
 const defaultMirror = "https://ghfast.top"
 
 // version is set at build time via:
-//   go build -ldflags "-X main.version=v2.0.0" -o mirr.exe .
+//
+//	go build -ldflags "-X main.version=v2.0.0" -o mirr.exe .
 var version = "dev"
 
 // Compiled once at package init instead of on every call.

@@ -227,7 +227,7 @@ func TestRunClonePartialFailure(t *testing.T) {
 	var out, errBuf bytes.Buffer
 	var cloned []string
 	code := run(options{
-		urls: []string{"https://github.com/golang/go", "https://github.com/gorilla/mux"},
+		urls:   []string{"https://github.com/golang/go", "https://github.com/gorilla/mux"},
 		mirror: "https://ghfast.top",
 		clone:  true,
 		cloneFn: func(url string) error {
