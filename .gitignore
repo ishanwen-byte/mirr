@@ -1,7 +1,7 @@
-# Binaries
-mirr
-mirr.exe
-mirr-*
+# Binaries (root level only; skills/mirr is source)
+/mirr
+/mirr.exe
+/mirr-*
 
 # Go build/test artifacts
 *.test
