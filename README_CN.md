@@ -15,7 +15,7 @@
 ## 安装
 
 ```bash
-git clone ssh://REDACTED-USER@REDACTED-PRIVATE-HOST:8022/goliath/mirr.git
+git clone https://github.com/ishanwen-byte/mirr.git
 cd mirr
 go build -o mirr.exe .
 ```

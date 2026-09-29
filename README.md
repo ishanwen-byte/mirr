@@ -15,7 +15,7 @@ A simple Go CLI tool that converts GitHub URLs to a mirror prefix (default: `ghf
 ## Installation
 
 ```bash
-git clone ssh://REDACTED-USER@REDACTED-PRIVATE-HOST:8022/goliath/mirr.git
+git clone https://github.com/ishanwen-byte/mirr.git
 cd mirr
 go build -o mirr.exe .
 ```
